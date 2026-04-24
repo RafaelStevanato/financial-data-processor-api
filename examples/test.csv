@@ -1,0 +1,4 @@
+date,description,amount,category
+2024-01-01,Sale A,100,income
+2024-01-02,Expense B,-50,expense
+2024-01-03,Sale C,200,income
