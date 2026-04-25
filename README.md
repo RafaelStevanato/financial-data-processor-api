@@ -675,6 +675,70 @@ After:
 
 This upgrade significantly improves the real-world relevance of the project by introducing a proper cloud storage layer aligned with production architectures.
 
+```mermaid
+flowchart LR
+    Client[Client / Browser / Swagger UI] -->|POST CSV file| Internet[Internet]
+    Internet --> SG[Security Group\nInbound: TCP 8000\nSSH: TCP 22]
+
+    subgraph AWS[AWS Cloud]
+        subgraph VPC[VPC 10.0.0.0/16]
+            IGW[Internet Gateway]
+            SG --> EC2[EC2 Instance\nAmazon Linux\nFastAPI + Uvicorn\nsystemd service]
+            EC2 --> Local[Temporary local storage\ndata/uploads + output]
+            EC2 --> Engine[Processing Engine\nreader.py + validator.py\nmetrics.py + reporter.py]
+            Engine --> KPIs[KPIs + validation summary]
+            Engine --> Files[Processed CSV + report TXT]
+            Private[Private subnet 10.0.2.0/24\nNo direct internet\nFuture backend tier]
+        end
+
+        Role[IAM Role\nfdp-api-ec2-role\nLeast privilege] --> EC2
+
+        subgraph S3[Amazon S3 Bucket\nfdp-api-storage-rafael-stevanato]
+            Uploads[uploads/\nOriginal CSV files]
+            Outputs[outputs/\nProcessed CSV + financial report]
+        end
+
+        EC2 -->|Upload original CSV| Uploads
+        Files -->|Upload generated files| Outputs
+        KPIs --> Response[JSON response]
+        Uploads --> Response
+        Outputs --> Response
+    end
+
+    Response --> Client
+```
+
+## Architecture Summary
+
+The user uploads a CSV file through Swagger UI. The request reaches a FastAPI
+application running on an EC2 instance inside a public subnet. The API temporarily
+saves the uploaded file, processes it using the Python financial data engine,
+calculates KPIs, generates output files, and uploads both the original file and
+generated outputs to Amazon S3.
+
+S3 is private. The EC2 instance accesses the bucket through an IAM Role with
+least-privilege permissions, avoiding hardcoded AWS credentials in the source code.
+
+## Current Flow
+
+1. Client uploads CSV through FastAPI.
+2. EC2 receives and temporarily stores the file.
+3. Processing engine validates rows and calculates KPIs.
+4. Processed CSV and TXT report are generated.
+5. Original and generated files are uploaded to S3.
+6. API returns JSON with KPIs, validation summary, preview, local paths, and S3 URIs.
+
+## AWS Services Used
+
+- Amazon EC2
+- Amazon S3
+- IAM Role
+- Security Group
+- VPC
+- Internet Gateway
+- Public subnet
+```
+
 ---
 
 ## Author
