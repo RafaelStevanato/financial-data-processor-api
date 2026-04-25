@@ -607,6 +607,74 @@ Planned improvements:
 - Add a simple frontend upload interface
 - Add authentication for controlled access
 
+## AWS S3 Integration (Cloud Storage Layer)
+
+This project was extended to include AWS S3 as the storage layer for both input and output files, transforming the API from a local file processor into a cloud-based data pipeline.
+
+### What was implemented
+
+- Created a dedicated S3 bucket for the project
+- Structured storage using logical folders:
+  - uploads/ → original CSV files
+  - outputs/ → processed data and reports
+- Configured IAM Role attached to EC2 instance
+- Implemented least-privilege access policy (no full S3 access)
+- Removed need for access keys in code (secure by design)
+
+### Backend Changes
+
+- Added boto3 integration
+- Created a dedicated module:
+  src/s3_storage.py
+- Implemented reusable upload function for S3
+
+Flow inside the API:
+
+1. Receive CSV file via FastAPI endpoint
+2. Save file temporarily on EC2
+3. Process file (validation + KPI calculation)
+4. Upload original file to S3 (uploads/)
+5. Upload processed data to S3 (outputs/)
+6. Upload generated report to S3 (outputs/)
+7. Return structured JSON including S3 file paths
+
+### Example Output
+
+The API now returns both local paths and S3 URIs:
+
+{
+  "outputs": {
+    "local_uploaded_file": "...",
+    "local_processed_data_file": "...",
+    "local_financial_report_file": "...",
+    "s3_uploaded_file": "s3://bucket/uploads/file.csv",
+    "s3_processed_data_file": "s3://bucket/outputs/data.csv",
+    "s3_financial_report_file": "s3://bucket/outputs/report.txt"
+  }
+}
+
+### Why this matters
+
+Before:
+- Files stored only on EC2
+- Not persistent
+- Not scalable
+
+After:
+- Files stored in S3 (durable and scalable)
+- Separation of compute and storage
+- Cloud-native architecture
+
+### Key Concepts Applied
+
+- IAM Role-based authentication
+- Principle of least privilege
+- Object storage design (S3)
+- Backend integration with cloud services
+- End-to-end data pipeline (upload → process → store → return)
+
+This upgrade significantly improves the real-world relevance of the project by introducing a proper cloud storage layer aligned with production architectures.
+
 ---
 
 ## Author
