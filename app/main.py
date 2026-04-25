@@ -2,6 +2,7 @@ from datetime import datetime
 from pathlib import Path
 from fastapi import FastAPI, UploadFile, File, HTTPException
 from src.processor import process_financial_file
+from src.s3_storage import upload_file_to_s3
 
 app = FastAPI(
     title="Financial Data Processor API",
@@ -32,12 +33,10 @@ async def process_csv(file: UploadFile = File(...)):
 
     input_file = UPLOAD_DIR / file.filename
 
-    # nomes únicos para evitar sobrescrita
     timestamp = datetime.now().strftime("%d_%m_%Y_%H_%M")
     output_data_file = OUTPUT_DIR / f"processed_data_{timestamp}.csv"
     output_report_file = OUTPUT_DIR / f"financial_report_{timestamp}.txt"
 
-    # salvar upload
     with open(input_file, "wb") as buffer:
         content = await file.read()
         buffer.write(content)
@@ -49,10 +48,23 @@ async def process_csv(file: UploadFile = File(...)):
             str(output_report_file)
         )
 
-        # padronizar tipos
+        uploaded_file_s3_uri = upload_file_to_s3(
+            str(input_file),
+            f"uploads/{input_file.name}"
+        )
+
+        processed_data_s3_uri = upload_file_to_s3(
+            str(output_data_file),
+            f"outputs/{output_data_file.name}"
+        )
+
+        financial_report_s3_uri = upload_file_to_s3(
+            str(output_report_file),
+            f"outputs/{output_report_file.name}"
+        )
+
         kpis = {k: float(v) for k, v in kpis.items()}
 
-        # validation summary
         valid = kpis["valid_transactions"]
         total = kpis["total_transactions"]
         invalid = kpis["invalid_transactions"]
@@ -63,7 +75,6 @@ async def process_csv(file: UploadFile = File(...)):
             "invalid_rate": float(invalid / total) if total else 0.0
         }
 
-        # preview das primeiras linhas
         preview = df.head(5).to_dict(orient="records")
 
         return {
@@ -73,13 +84,18 @@ async def process_csv(file: UploadFile = File(...)):
             "validation_summary": validation_summary,
             "preview": preview,
             "outputs": {
-                "processed_data_file": str(output_data_file),
-                "financial_report_file": str(output_report_file)
+                "local_uploaded_file": str(input_file),
+                "local_processed_data_file": str(output_data_file),
+                "local_financial_report_file": str(output_report_file),
+                "s3_uploaded_file": uploaded_file_s3_uri,
+                "s3_processed_data_file": processed_data_s3_uri,
+                "s3_financial_report_file": financial_report_s3_uri
             }
         }
 
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
 
-    except Exception:
-        raise HTTPException(status_code=500, detail="Internal server error")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
